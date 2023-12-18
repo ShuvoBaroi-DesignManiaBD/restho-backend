@@ -42,9 +42,20 @@ async function run() {
     // client.connect();
     const db = client.db("restho");
     const users = db.collection("users");
+    const foods = db.collection("foods");
 
+    // API for collecting new food item data to database
+    app.post(`/add-food`, async (req, res) => {
+      const food = req.body;
+      const result = await foods.insertOne(food);
+      res.send(result);
+    });
 
-    
+    // API for getting all food items data from database
+    app.get(`/all-foods`, async (req, res) => {
+      const result = await foods.find().toArray();
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({
