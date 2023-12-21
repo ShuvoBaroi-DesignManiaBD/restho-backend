@@ -61,7 +61,16 @@ async function run() {
       const allFoods = await cursor.skip(skip).limit(perPage).toArray();
       const foodsCount = await foods.countDocuments();
       res.send({allFoods, foodsCount});
-    });  
+    });
+
+    // API for getting all food items data from database
+    app.get('/search', async (req, res) => {
+      const keyword = req.query.keyword;
+      const query = {name: {$regex: keyword, $options: 'i'}};
+      const result = await foods.find(query).toArray();
+      res.send(result);
+    });
+    
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({
