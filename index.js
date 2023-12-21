@@ -52,10 +52,16 @@ async function run() {
     });
 
     // API for getting all food items data from database
-    app.get(`/all-foods`, async (req, res) => {
-      const result = await foods.find().toArray();
-      res.send(result);
-    });
+    app.get('/all-foods', async (req, res) => {
+      const page = req.query.page;
+      const pageNumber = parseInt(page);
+      const perPage = 2;
+      const skip = pageNumber * perPage;
+      const cursor = await foods.find();
+      const allFoods = await cursor.skip(skip).limit(perPage).toArray();
+      const foodsCount = await foods.countDocuments();
+      res.send({allFoods, foodsCount});
+    });  
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({
