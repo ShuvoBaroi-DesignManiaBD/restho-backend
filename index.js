@@ -56,6 +56,18 @@ async function run() {
       }
     });
 
+    // API for getting cart items
+    app.get('/foods/:id', async (req, res) => {
+      try {
+        const foodId = req.params.id;
+        const query = {_id: new ObjectId(foodId)}; 
+        const food = await foods.findOne(query);  
+        return res.json(food); 
+      } catch (error) {
+        console.error(error);
+      }
+    });
+
     // API for getting all food items data from database
     app.get('/all-foods', async (req, res) => {
       try {
