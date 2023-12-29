@@ -107,6 +107,15 @@ async function run() {
         const food = req.body;
         const foodId = food._id;
         const userQuery = { userId: food.userId };
+        const foodQuery = {_id: new ObjectId(foodId)};
+        const searchFood = await foods.findOne(foodQuery);
+        const quantity = await searchFood.quantity;
+        const updateFood = {
+          $set: {
+            'quantity': Number(quantity) - Number(food.cartQuantity), 
+          }
+        };
+        const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
         const existingItemQuery = {
           userId: food.userId,
           'items._id': foodId 
