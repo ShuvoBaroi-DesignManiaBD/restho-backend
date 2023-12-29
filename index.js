@@ -41,34 +41,117 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     // client.connect();
     const db = client.db("restho");
-    const users = db.collection("users");
     const foods = db.collection("foods");
+    const cart = db.collection("cart");
 
+    // ============= Food CRUD operations ================
     // API for collecting new food item data to database
     app.post(`/add-food`, async (req, res) => {
-      const food = req.body;
-      const result = await foods.insertOne(food);
-      res.send(result);
+      try {
+        const food = req.body;
+        const result = await foods.insertOne(food);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     // API for getting all food items data from database
     app.get('/all-foods', async (req, res) => {
-      const page = req.query.page;
-      const pageNumber = parseInt(page);
-      const perPage = 2;
-      const skip = pageNumber * perPage;
-      const cursor = await foods.find();
-      const allFoods = await cursor.skip(skip).limit(perPage).toArray();
-      const foodsCount = await foods.countDocuments();
-      res.send({allFoods, foodsCount});
+      try {
+        const page = req.query.page;
+        const pageNumber = parseInt(page);
+        const perPage = 2;
+        const skip = pageNumber * perPage;
+        const cursor = await foods.find();
+        const result = await cursor.skip(skip).limit(perPage).toArray();
+        const foodsCount = await foods.countDocuments();
+        res.send({
+          foods: result,
+          foodsCount
+        });
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     // API for getting all food items data from database
     app.get('/search', async (req, res) => {
-      const keyword = req.query.keyword;
-      const query = {name: {$regex: keyword, $options: 'i'}};
-      const result = await foods.find(query).toArray();
-      res.send(result);
+      try {
+        const keyword = req.query.keyword;
+        const page = req.query.page;
+        const pageNumber = parseInt(page);
+        const perPage = 2;
+        const skip = pageNumber * perPage;
+        const query = {
+          name: {
+            $regex: keyword,
+            $options: 'i'
+          }
+        };
+        const result = await foods.find(query).skip(skip).limit(perPage).toArray();
+        const foodsCount = await foods.countDocuments(query);
+        console.log(result, foodsCount);
+        res.send({
+          foods: result,
+          foodsCount
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    // =============== Cart CRUD opearations ===============
+    app.put(`/cart/add`, async (req, res) => {
+      try {
+        const food = req.body;
+        const foodId = food._id;
+        const userQuery = { userId: food.userId };
+        const existingItemQuery = {
+          userId: food.userId,
+          'items._id': foodId 
+        };
+        const existingItem = await cart.findOne(existingItemQuery);
+    
+        if (existingItem) {
+          const updateExistingItemQuery = {
+            userId: food.userId,
+            'items._id': foodId
+          };
+          const updateExistingItem = {
+            $set: {
+              'items.$': food 
+            }
+          };
+          const updatedItem = await cart.updateOne(updateExistingItemQuery, updateExistingItem);
+          return res.json(updatedItem);
+        } else {
+          const update = {
+            $setOnInsert: { created: Date.now() },
+            $push: { items: { $each: [food], $position: 0 } } 
+          };
+          const options = { upsert: true, new: true };
+          const result = await cart.findOneAndUpdate(userQuery, update, options);
+          return res.json(result);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    });
+    
+    
+    
+    // API for getting cart items
+    app.get('/cart/get', async (req, res) => {
+      try {
+        const userId = req.query.id; 
+        const userQuery = { userId }; 
+        const userCart = await cart.findOne(userQuery); 
+        const items = userCart ? userCart.items : []; 
+        return res.json(items); 
+      } catch (error) {
+        console.error(error);
+      }
     });
     
 
