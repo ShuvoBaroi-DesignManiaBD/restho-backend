@@ -43,6 +43,7 @@ async function run() {
     const db = client.db("restho");
     const foods = db.collection("foods");
     const cart = db.collection("cart");
+    const orders = db.collection("orders");
 
     // ============= Food CRUD operations ================
     // API for collecting new food item data to database
@@ -117,64 +118,109 @@ async function run() {
     app.put(`/cart/add`, async (req, res) => {
       try {
         const food = req.body;
-        const foodId = food._id;
+        const foodId = food.foodId;
+        const quantity = food.cartQuantity;
         const userQuery = { userId: food.userId };
-        const foodQuery = {_id: new ObjectId(foodId)};
+        const foodQuery = { _id: new ObjectId(foodId) };
+      
         const searchFood = await foods.findOne(foodQuery);
-        const quantity = await searchFood.quantity;
+        if (!searchFood) {
+          return res.status(404).json({ error: 'Food item not found' });
+        }
+    
+        const newQuantity = Number(searchFood.quantity) - Number(food.cartQuantity);
+        if (newQuantity < 0) {
+          return res.status(400).json({ error: 'Insufficient quantity' });
+        }
+    
         const updateFood = {
           $set: {
-            'quantity': Number(quantity) - Number(food.cartQuantity), 
+            quantity: newQuantity,
           }
         };
         const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
+    
+        const cartItem = {
+          ...food,
+          cartQuantity: quantity,
+        };
+    
         const existingItemQuery = {
           userId: food.userId,
-          'items._id': foodId 
+          foodId: food.foodId
+        };
+        
+        const existingItemProjection = {
+          items: {
+            $elemMatch: { _id: foodId }
+          }
         };
         const existingItem = await cart.findOne(existingItemQuery);
-    
+
         if (existingItem) {
-          const updateExistingItemQuery = {
-            userId: food.userId,
-            'items._id': foodId
-          };
+          const newQuantity = Number(existingItem.cartQuantity + quantity);
+          const newTotal = newQuantity * food.price;
+          console.log(existingItem, newQuantity);
+          
           const updateExistingItem = {
             $set: {
-              'items.$': food 
+              cartQuantity: newQuantity,
+              total: newTotal
             }
           };
-          const updatedItem = await cart.updateOne(updateExistingItemQuery, updateExistingItem);
+          const updatedItem = await cart.updateOne(existingItemQuery, updateExistingItem);
           return res.json(updatedItem);
         } else {
-          const update = {
-            $setOnInsert: { created: Date.now() },
-            $push: { items: { $each: [food], $position: 0 } } 
-          };
-          const options = { upsert: true, new: true };
-          const result = await cart.findOneAndUpdate(userQuery, update, options);
-          return res.json(result);
+          const cartData = { createdAt: Date.now(), ...food}
+          console.log(cartData);
+          const insertCart = await cart.insertOne(cartData);
+          return res.json(insertCart);
         }
       } catch (error) {
         console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
       }
     });
-    
     
     
     // API for getting cart items
     app.get('/cart/get', async (req, res) => {
       try {
-        const userId = req.query.id; 
-        const userQuery = { userId }; 
-        const userCart = await cart.findOne(userQuery); 
-        const items = userCart ? userCart.items : []; 
-        return res.json(items); 
+        const id = req.query.id; 
+        const userQuery = { userId: id }; 
+        const userCart = await cart.find(userQuery).toArray() || []; 
+        return res.json(userCart); 
       } catch (error) {
         console.error(error);
       }
     });
     
+    // =============== Orders related APIs ==================
+    // API for add new order data
+    app.post(`/orders/add-new`, async (req, res) => {
+      try {
+        const order = req.body;
+        const items = order.foods;
+        const result = await orders.insertOne(order);
+        items.map(async item => {
+          const foodId = item.foodId;
+          const query = {
+            _id: new ObjectId(foodId)
+          }
+          const food = await foods.findOne(query);
+          const previousOrdersCount = Number(food.orderCount);
+          const updateFood = {
+            $set: {
+              'orderCount': previousOrdersCount + item.cartQuantity, 
+            }
+          };
+          const updateFoodItem = await foods.updateOne(query, updateFood);
+        })
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({
