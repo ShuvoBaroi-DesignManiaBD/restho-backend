@@ -57,7 +57,7 @@ async function run() {
       }
     });
 
-    // API for getting cart items
+    // API for getting a specific food data
     app.get('/foods/:id', async (req, res) => {
       try {
         const foodId = req.params.id;
@@ -88,7 +88,7 @@ async function run() {
       }
     });
 
-    // API for getting all food items data from database
+    // API for searching a food data
     app.get('/search', async (req, res) => {
       try {
         const keyword = req.query.keyword;
@@ -155,6 +155,7 @@ async function run() {
             $elemMatch: { _id: foodId }
           }
         };
+
         const existingItem = await cart.findOne(existingItemQuery);
 
         if (existingItem) {
