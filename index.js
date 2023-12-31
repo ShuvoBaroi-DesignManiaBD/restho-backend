@@ -211,6 +211,36 @@ async function run() {
       }
     });
 
+    // API for deleting a product from a specific user's cart items
+    app.delete('/cart/user/product/delete', async (req, res) => {
+      try {
+        const id = req.query.userid;
+        const food_id = req.query.foodid;
+        const cartQuantity = req.query.qty;
+        const userQuery = { 
+          userId: id,
+          foodId: food_id
+        };
+        
+        const foodQuery = { _id: new ObjectId(food_id) };
+        const searchFood = await foods.findOne(foodQuery);
+        const newQuantity = Number(searchFood.quantity) + Number(cartQuantity);
+        const updateFood = {
+          $set: {
+            quantity: newQuantity,
+          }
+        };
+        const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
+        // const userCart = await cart.find(userQuery).toArray() || [];
+        // const updateOperation = { $pull: { items: { _id: product._id} } };
+        const result = await cart.deleteMany(userQuery);
+
+        res.send({result, updateFoodItem});
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    });
+
     // =============== Orders related APIs ==================
     // API for add new order data
     app.post(`/orders/add-new`, async (req, res) => {
