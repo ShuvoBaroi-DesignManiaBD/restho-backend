@@ -195,7 +195,22 @@ async function run() {
         console.error(error);
       }
     });
-    
+
+    // API for deleting a specific user's cart items
+    app.delete('/cart/user/delete', async (req, res) => {
+      try {
+        const id = req.query.id; 
+        const userQuery = { userId: id }; 
+        // const userCart = await cart.find(userQuery).toArray() || [];
+        // const updateOperation = { $pull: { items: { _id: product._id} } };
+        const result = await cart.deleteMany(userQuery);
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    });
+
     // =============== Orders related APIs ==================
     // API for add new order data
     app.post(`/orders/add-new`, async (req, res) => {
