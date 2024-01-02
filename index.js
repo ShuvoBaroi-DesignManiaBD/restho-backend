@@ -58,17 +58,18 @@ async function run() {
     });
 
     // API for getting a specific food data
-    app.get('/foods/:id', async (req, res) => {
+    app.get('/foods/:name', async (req, res) => {
       try {
-        const foodId = req.params.id;
-        const query = {_id: new ObjectId(foodId)}; 
-        const food = await foods.findOne(query);  
-        return res.json(food); 
+        const foodName = (req.params.name).replace(/-/g, ' ');
+        const query = { name: { $regex: new RegExp('^' + foodName, 'i') } };
+        const food = await foods.findOne(query);
+        return res.json(food);
       } catch (error) {
         console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
       }
     });
-
+    
     // API for getting all food items data from database
     app.get('/all-foods', async (req, res) => {
       try {
@@ -183,7 +184,6 @@ async function run() {
       }
     });
     
-    
     // API for getting cart items
     app.get('/cart/get', async (req, res) => {
       try {
@@ -201,8 +201,6 @@ async function run() {
       try {
         const id = req.query.id; 
         const userQuery = { userId: id }; 
-        // const userCart = await cart.find(userQuery).toArray() || [];
-        // const updateOperation = { $pull: { items: { _id: product._id} } };
         const result = await cart.deleteMany(userQuery);
 
         res.send(result);
@@ -211,8 +209,8 @@ async function run() {
       }
     });
 
-    // API for deleting a product from a specific user's cart items
-    app.delete('/cart/user/product/delete', async (req, res) => {
+    // API for deleting a food from a specific user's cart items
+    app.delete('/cart/user/food/delete', async (req, res) => {
       try {
         const id = req.query.userid;
         const food_id = req.query.foodid;
@@ -231,8 +229,6 @@ async function run() {
           }
         };
         const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
-        // const userCart = await cart.find(userQuery).toArray() || [];
-        // const updateOperation = { $pull: { items: { _id: product._id} } };
         const result = await cart.deleteMany(userQuery);
 
         res.send({result, updateFoodItem});
@@ -267,6 +263,8 @@ async function run() {
         console.error(error);
       }
     });
+
+    
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({
