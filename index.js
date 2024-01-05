@@ -241,30 +241,78 @@ async function run() {
     // API for add new order data
     app.post(`/orders/add-new`, async (req, res) => {
       try {
-        const order = req.body;
-        const items = order.foods;
-        const result = await orders.insertOne(order);
-        items.map(async item => {
-          const foodId = item.foodId;
-          const query = {
-            _id: new ObjectId(foodId)
-          }
-          const food = await foods.findOne(query);
-          const previousOrdersCount = Number(food.orderCount);
-          const updateFood = {
-            $set: {
-              'orderCount': previousOrdersCount + item.cartQuantity, 
-            }
-          };
-          const updateFoodItem = await foods.updateOne(query, updateFood);
-        })
-        res.send(result);
+        const orderData = req.body;
+        const result = await orders.insertMany(orderData);
+        res.json(result);
       } catch (error) {
         console.error(error);
       }
     });
 
-    
+    // app.post(`/orders/add-new`, async (req, res) => {
+    //   try {
+    //     const order = req.body;
+    //     const items = order.foods;
+    //     const result = await orders.insertOne(order);
+    //     items.map(async item => {
+    //       const foodId = item.foodId;
+    //       const query = {
+    //         _id: new ObjectId(foodId)
+    //       }
+    //       const food = await foods.findOne(query);
+    //       const previousOrdersCount = Number(food.orderCount);
+    //       const updateFood = {
+    //         $set: {
+    //           'orderCount': previousOrdersCount + item.cartQuantity, 
+    //         }
+    //       };
+    //       const updateFoodItem = await foods.updateOne(query, updateFood);
+    //     })
+    //     res.send(result);
+    //   } catch (error) {
+    //     console.error(error);
+    //   }
+    // });
+
+    // API for getting a specific user's orders data
+    app.get('/orders/get', async (req, res) => {
+      try {
+        const id = req.query.id;
+        const page = req.query.page;
+        const pageNumber = parseInt(page);
+        const perPage = 5;
+        const skip = pageNumber * perPage; 
+        const userQuery = { userId: id };
+        const cursor = await orders.find(userQuery);
+        const result = await cursor.skip(skip).limit(perPage).toArray();
+        const countOrders = await orders.countDocuments(userQuery);
+        // console.log(userOrders, countOrders); 
+        return res.json({result, countOrders}); 
+      } catch (error) {
+        console.error(error);
+      }
+    });
+
+    // API for deleting a specific user's specific order
+    app.delete('/orders/delete', async (req, res) => {
+      try {
+        const id = req.query.id;
+        const orderQuery = {_id: id}
+        const findOrder = await orders.findOne(orderQuery);
+        const foodId = findOrder.foodId;
+        const foodQuery = { _id: new ObjectId(foodId) };
+        const food = await foods.findOne(foodQuery);
+        const newQuantity = Number(findOrder.cartQuantity + food.quantity);
+        const updateFood = await foods.updateOne(foodQuery, {
+          $set: {quantity: newQuantity},
+        });
+        const deleteResult = await orders.deleteOne(orderQuery);
+
+        res.send({updateFood, deleteResult});
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({
