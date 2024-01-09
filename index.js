@@ -16,6 +16,7 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:");
   next();
 });
+
 const corsConfig = {
   origin: '*',
   credentials: true,
@@ -61,27 +62,56 @@ async function run() {
     app.get('/foods/:name', async (req, res) => {
       try {
         const foodName = (req.params.name).replace(/-/g, ' ');
-        const query = { name: { $regex: new RegExp('^' + foodName, 'i') } };
+        const query = {
+          name: {
+            $regex: new RegExp('^' + foodName, 'i')
+          }
+        };
         const food = await foods.findOne(query);
         return res.json(food);
       } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({
+          error: 'Internal Server Error'
+        });
       }
     });
-    
+
     // API for getting all food items data from database
     app.get('/all-foods', async (req, res) => {
       try {
         const page = req.query.page;
         const pageNumber = parseInt(page);
-        const perPage = 2;
+        const perPage = 8;
         const skip = pageNumber * perPage;
         const cursor = await foods.find();
         const result = await cursor.skip(skip).limit(perPage).toArray();
         const foodsCount = await foods.countDocuments();
         res.send({
           foods: result,
+          foodsCount
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    // API for getting all food items data from database
+    app.get('/added-foods', async (req, res) => {
+      try {
+        const email = req.query.email;
+        const page = req.query.page ? Number(req.query.page) : 0;
+        const query = {
+          ownerEmail: email
+        }
+        const pageNumber = parseInt(page);
+        const perPage = 2;
+        const skip = pageNumber * perPage;
+        const cursor = await foods.find(query);
+        const result = await cursor.skip(skip).limit(perPage).toArray();
+        const foodsCount = await foods.countDocuments(query);
+        res.send({
+          result,
           foodsCount
         });
       } catch (error) {
@@ -121,39 +151,49 @@ async function run() {
         const food = req.body;
         const foodId = food.foodId;
         const quantity = food.cartQuantity;
-        const userQuery = { userId: food.userId };
-        const foodQuery = { _id: new ObjectId(foodId) };
-      
+        const userQuery = {
+          userId: food.userId
+        };
+        const foodQuery = {
+          _id: new ObjectId(foodId)
+        };
+
         const searchFood = await foods.findOne(foodQuery);
         if (!searchFood) {
-          return res.status(404).json({ error: 'Food item not found' });
+          return res.status(404).json({
+            error: 'Food item not found'
+          });
         }
-    
+
         const newQuantity = Number(searchFood.quantity) - Number(food.cartQuantity);
         if (newQuantity < 0) {
-          return res.status(400).json({ error: 'Insufficient quantity' });
+          return res.status(400).json({
+            error: 'Insufficient quantity'
+          });
         }
-    
+
         const updateFood = {
           $set: {
             quantity: newQuantity,
           }
         };
         const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
-    
+
         const cartItem = {
           ...food,
           cartQuantity: quantity,
         };
-    
+
         const existingItemQuery = {
           userId: food.userId,
           foodId: food.foodId
         };
-        
+
         const existingItemProjection = {
           items: {
-            $elemMatch: { _id: foodId }
+            $elemMatch: {
+              _id: foodId
+            }
           }
         };
 
@@ -163,7 +203,7 @@ async function run() {
           const newQuantity = Number(existingItem.cartQuantity + quantity);
           const newTotal = newQuantity * food.price;
           console.log(existingItem, newQuantity);
-          
+
           const updateExistingItem = {
             $set: {
               cartQuantity: newQuantity,
@@ -173,24 +213,54 @@ async function run() {
           const updatedItem = await cart.updateOne(existingItemQuery, updateExistingItem);
           return res.json(updatedItem);
         } else {
-          const cartData = { createdAt: Date.now(), ...food}
+          const cartData = {
+            createdAt: Date.now(),
+            ...food
+          }
           console.log(cartData);
           const insertCart = await cart.insertOne(cartData);
           return res.json(insertCart);
         }
       } catch (error) {
         console.error(error);
-        return res.status(500).json({ error: 'Internal Server Error' });
+        return res.status(500).json({
+          error: 'Internal Server Error'
+        });
       }
     });
-    
+
+    // API for updating a food data
+    app.put(`/food/update`, async (req, res) => {
+      try {
+        const food = req.body;
+        const foodId = req.query.id;
+        const foodQuery = {
+          _id: new ObjectId(foodId)
+        };
+        const updateFood = {
+          $set: {
+            ...food
+          }
+        };
+        const result = await foods.updateOne(foodQuery, updateFood);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+          error: 'Internal Server Error'
+        });
+      }
+    });
+
     // API for getting cart items
     app.get('/cart/get', async (req, res) => {
       try {
-        const id = req.query.id; 
-        const userQuery = { userId: id }; 
-        const userCart = await cart.find(userQuery).toArray() || []; 
-        return res.json(userCart); 
+        const id = req.query.id;
+        const userQuery = {
+          userId: id
+        };
+        const userCart = await cart.find(userQuery).toArray() || [];
+        return res.json(userCart);
       } catch (error) {
         console.error(error);
       }
@@ -199,8 +269,10 @@ async function run() {
     // API for deleting a specific user's cart items
     app.delete('/cart/user/delete', async (req, res) => {
       try {
-        const id = req.query.id; 
-        const userQuery = { userId: id }; 
+        const id = req.query.id;
+        const userQuery = {
+          userId: id
+        };
         const result = await cart.deleteMany(userQuery);
 
         res.send(result);
@@ -215,12 +287,14 @@ async function run() {
         const id = req.query.userid;
         const food_id = req.query.foodid;
         const cartQuantity = req.query.qty;
-        const userQuery = { 
+        const userQuery = {
           userId: id,
           foodId: food_id
         };
-        
-        const foodQuery = { _id: new ObjectId(food_id) };
+
+        const foodQuery = {
+          _id: new ObjectId(food_id)
+        };
         const searchFood = await foods.findOne(foodQuery);
         const newQuantity = Number(searchFood.quantity) + Number(cartQuantity);
         const updateFood = {
@@ -231,7 +305,10 @@ async function run() {
         const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
         const result = await cart.deleteMany(userQuery);
 
-        res.send({result, updateFoodItem});
+        res.send({
+          result,
+          updateFoodItem
+        });
       } catch (error) {
         console.error('Error:', error);
       }
@@ -242,6 +319,19 @@ async function run() {
     app.post(`/orders/add-new`, async (req, res) => {
       try {
         const orderData = req.body;
+        orderData.map(async (item) => {
+          const foodQuery = {
+            _id: new ObjectId(item.foodId)
+          };
+          const searchFood = await foods.findOne(foodQuery);
+          const newQuantity = Number(searchFood.orderCount) + Number(item.cartQuantity);
+          const updateFood = {
+            $set: {
+              orderCount: newQuantity,
+            }
+          };
+          const updateFoodItem = await foods.updateOne(foodQuery, updateFood);
+        })
         const result = await orders.insertMany(orderData);
         res.json(result);
       } catch (error) {
@@ -249,30 +339,6 @@ async function run() {
       }
     });
 
-    // app.post(`/orders/add-new`, async (req, res) => {
-    //   try {
-    //     const order = req.body;
-    //     const items = order.foods;
-    //     const result = await orders.insertOne(order);
-    //     items.map(async item => {
-    //       const foodId = item.foodId;
-    //       const query = {
-    //         _id: new ObjectId(foodId)
-    //       }
-    //       const food = await foods.findOne(query);
-    //       const previousOrdersCount = Number(food.orderCount);
-    //       const updateFood = {
-    //         $set: {
-    //           'orderCount': previousOrdersCount + item.cartQuantity, 
-    //         }
-    //       };
-    //       const updateFoodItem = await foods.updateOne(query, updateFood);
-    //     })
-    //     res.send(result);
-    //   } catch (error) {
-    //     console.error(error);
-    //   }
-    // });
 
     // API for getting a specific user's orders data
     app.get('/orders/get', async (req, res) => {
@@ -281,13 +347,18 @@ async function run() {
         const page = req.query.page;
         const pageNumber = parseInt(page);
         const perPage = 5;
-        const skip = pageNumber * perPage; 
-        const userQuery = { userId: id };
+        const skip = pageNumber * perPage;
+        const userQuery = {
+          userId: id
+        };
         const cursor = await orders.find(userQuery);
         const result = await cursor.skip(skip).limit(perPage).toArray();
         const countOrders = await orders.countDocuments(userQuery);
         // console.log(userOrders, countOrders); 
-        return res.json({result, countOrders}); 
+        return res.json({
+          result,
+          countOrders
+        });
       } catch (error) {
         console.error(error);
       }
@@ -297,18 +368,27 @@ async function run() {
     app.delete('/orders/delete', async (req, res) => {
       try {
         const id = req.query.id;
-        const orderQuery = {_id: id}
+        const orderQuery = {
+          _id: id
+        }
         const findOrder = await orders.findOne(orderQuery);
         const foodId = findOrder.foodId;
-        const foodQuery = { _id: new ObjectId(foodId) };
+        const foodQuery = {
+          _id: new ObjectId(foodId)
+        };
         const food = await foods.findOne(foodQuery);
         const newQuantity = Number(findOrder.cartQuantity + food.quantity);
         const updateFood = await foods.updateOne(foodQuery, {
-          $set: {quantity: newQuantity},
+          $set: {
+            quantity: newQuantity
+          },
         });
         const deleteResult = await orders.deleteOne(orderQuery);
 
-        res.send({updateFood, deleteResult});
+        res.send({
+          updateFood,
+          deleteResult
+        });
       } catch (error) {
         console.error('Error:', error);
       }
