@@ -95,6 +95,18 @@ async function run() {
         console.log(error);
       }
     });
+    
+    // API for getting all food items data from database
+    app.get('/top-selling-foods', async (req, res) => {
+      try {
+        const quantity = req.query.quantity || 4;
+        const cursor = await foods.find();
+        const result = await cursor.sort( { orderCount: -1 } ).limit(quantity).toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
 
     // API for getting all food items data from database
     app.get('/added-foods', async (req, res) => {
