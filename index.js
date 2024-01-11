@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 require('dotenv').config()
 const {
   MongoClient,
@@ -9,23 +11,25 @@ const {
 const app = express();
 const port = process.env.PORT || 3000;
 
-// middlewares
+// ============= middlewares =============================
 app.use(express.json());
-app.use(cors());
-app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:");
-  next();
-});
-
+// 'http://localhost:5173',
 const corsConfig = {
-  origin: '*',
+  origin: ['https://restho-backend.vercel.app', 'https://restho.netlify.app'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE']
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  // methods: ['GET', 'POST', 'PUT', 'DELETE']
 };
+app.use(cors(corsConfig));
+// app.options("", cors(corsConfig));
+app.use(cookieParser());
 
-app.use(cors(corsConfig))
-app.options("", cors(corsConfig))
-
+// Custom middlewares
+// app.use((req, res, next) => {
+//   res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:");
+//   next();
+// });
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@design-mania-bd.kt3v02q.mongodb.net/?retryWrites=true&w=majority`;
@@ -46,6 +50,52 @@ async function run() {
     const cart = db.collection("cart");
     const orders = db.collection("orders");
 
+    // ============== Custom middlewares =============================
+    const logger = (req, res, next) => {
+      console.log('logInfo: ', req.method, req.url);
+      next();
+    };
+
+    const verifyToken = (req, res, next) => {
+      const token = req?.cookies?.token;
+      if (token) {
+        jwt.verify(token, process.env.TOKEN_SECRET, (err, decoded) => {
+          if (err) {
+            return res.status(401).send({message: "unauthorized access"})
+          }
+          req.user = decoded;
+          next();
+        })
+      } else {
+        return res.status(401).send({message: "unauthorized access"})
+      }
+    }
+
+    // jwt related api
+    app.post('/jwt', async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.TOKEN_SECRET, { expiresIn: '1h' });
+      console.log(token);
+      res.cookie('token', token, {
+        httpOnly: false,
+        secure: true,
+        sameSite: "none"
+      })
+      .send({ success: true });
+    })
+
+    // Logout user & clear cookies
+    app.post('/logout', async (req, res) => {
+      try {
+        const user = req.body;
+        console.log('logging out', user);
+        res.clearCookie('token',{maxAge:0}).send({ success: true});
+      } catch (err) {
+        console.log(err);
+      }
+    });
+
+
     // ============= Food CRUD operations ================
     // API for collecting new food item data to database
     app.post(`/add-food`, async (req, res) => {
@@ -59,9 +109,10 @@ async function run() {
     });
 
     // API for getting a specific food data
-    app.get('/foods/:name', async (req, res) => {
+    app.get('/foods/:name', logger, async (req, res) => {
       try {
         const foodName = (req.params.name).replace(/-/g, ' ');
+        console.log('cookie', req.cookies);
         const query = {
           name: {
             $regex: new RegExp('^' + foodName, 'i')
@@ -353,10 +404,14 @@ async function run() {
 
 
     // API for getting a specific user's orders data
-    app.get('/orders/get', async (req, res) => {
+    app.get('/orders/get', verifyToken, async (req, res) => {
       try {
         const id = req.query.id;
+        if(id !== req.user.id) {
+          return res.status(403).send({message: "forbidden access"}) 
+        }
         const page = req.query.page;
+        console.log(req.user);
         const pageNumber = parseInt(page);
         const perPage = 5;
         const skip = pageNumber * perPage;
